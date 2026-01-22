@@ -2,6 +2,8 @@ from Tools.search_attraction import get_attraction
 from Tools.LLM import OpenAICompatibleClient
 from Tools.weather import get_weather
 import re
+from flask import Flask, request, jsonify
+from flask_cors import CORS
 
 AGENT_SYSTEM_PROMPT = """
 你是一个智能旅行助手。你的任务是分析用户的请求，并使用可用工具一步步地解决问题。
@@ -29,9 +31,9 @@ available_tools = {
 
 # --- 1. 配置LLM客户端 ---
 # 请根据您使用的服务，将这里替换成对应的凭证和地址
-API_KEY = ""
-BASE_URL = ""
-MODEL_ID = ""
+API_KEY = "ms-3c0dc0aa-8482-4f03-80dc-938d25ae9df4"
+BASE_URL = "https://api-inference.modelscope.cn/v1"
+MODEL_ID = "Qwen/Qwen3-32B"
 
 llm = OpenAICompatibleClient(
     model=MODEL_ID,
@@ -39,56 +41,86 @@ llm = OpenAICompatibleClient(
     base_url=BASE_URL
 )
 
-# --- 2. 初始化 ---
-user_prompt = "你好，请帮我查询一下今天北京的天气，然后根据天气推荐一个合适的旅游景点。"
-prompt_history = [f"用户请求: {user_prompt}"]
+# --- 2. 创建Flask应用 ---
+app = Flask(__name__)
+CORS(app)  # 允许跨域请求
 
-print(f"用户输入: {user_prompt}\n" + "="*40)
+# --- 3. 定义API路由 ---
+@app.route('/api/chat', methods=['POST'])
+def chat():
+    """处理用户的旅行咨询请求"""
+    try:
+        data = request.json
+        user_prompt = data.get('prompt', '')
+        
+        if not user_prompt:
+            return jsonify({"error": "请提供有效的查询内容"}), 400
+        
+        # 初始化对话历史
+        prompt_history = [f"用户请求: {user_prompt}"]
+        conversation = []
+        
+        # 运行主循环
+        for i in range(5):  # 设置最大循环次数
+            # 构建Prompt
+            full_prompt = "\n".join(prompt_history)
+            
+            # 调用LLM进行思考
+            llm_output = llm.generate(full_prompt, system_prompt=AGENT_SYSTEM_PROMPT)
+            # 模型可能会输出多余的Thought-Action，需要截断
+            match = re.search(r'(Thought:.*?Action:.*?)(?=\n\s*(?:Thought:|Action:|Observation:)|)', llm_output, re.DOTALL)
+            if match:
+                truncated = match.group(1).strip()
+                if truncated != llm_output.strip():
+                    llm_output = truncated
+            
+            # 记录模型输出
+            conversation.append({"role": "assistant", "content": llm_output})
+            prompt_history.append(llm_output)
+            
+            # 解析并执行行动
+            action_match = re.search(r"Action: (.*)", llm_output, re.DOTALL)
+            if not action_match:
+                observation = "错误: 未能解析到 Action 字段。请确保你的回复严格遵循 'Thought: ... Action: ...' 的格式。"
+                observation_str = f"Observation: {observation}"
+                conversation.append({"role": "system", "content": observation_str})
+                prompt_history.append(observation_str)
+                continue
+            
+            action_str = action_match.group(1).strip()
 
-# --- 3. 运行主循环 ---
-for i in range(5): # 设置最大循环次数
-    print(f"--- 循环 {i+1} ---\n")
-    
-    # 3.1. 构建Prompt
-    full_prompt = "\n".join(prompt_history)
-    
-    # 3.2. 调用LLM进行思考
-    llm_output = llm.generate(full_prompt, system_prompt=AGENT_SYSTEM_PROMPT)
-    # 模型可能会输出多余的Thought-Action，需要截断
-    match = re.search(r'(Thought:.*?Action:.*?)(?=\n\s*(?:Thought:|Action:|Observation:)|\Z)', llm_output, re.DOTALL)
-    if match:
-        truncated = match.group(1).strip()
-        if truncated != llm_output.strip():
-            llm_output = truncated
-            print("已截断多余的 Thought-Action 对")
-    print(f"模型输出:\n{llm_output}\n")
-    prompt_history.append(llm_output)
-    
-    # 3.3. 解析并执行行动
-    action_match = re.search(r"Action: (.*)", llm_output, re.DOTALL)
-    if not action_match:
-        observation = "错误: 未能解析到 Action 字段。请确保你的回复严格遵循 'Thought: ... Action: ...' 的格式。"
-        observation_str = f"Observation: {observation}"
-        print(f"{observation_str}\n" + "="*40)
-        prompt_history.append(observation_str)
-        continue
-    action_str = action_match.group(1).strip()
+            if action_str.startswith("Finish"):
+                final_answer = re.match(r"Finish\[(.*)\]", action_str).group(1)
+                conversation.append({"role": "system", "content": f"任务完成，最终答案: {final_answer}"})
+                return jsonify({"success": True, "conversation": conversation, "final_answer": final_answer})
+            
+            # 解析工具调用
+            tool_name = re.search(r"(\w+)\(", action_str).group(1)
+            args_str = re.search(r"\((.*)\)", action_str).group(1)
+            kwargs = dict(re.findall(r'(\w+)="([^"]*)"', args_str))
 
-    if action_str.startswith("Finish"):
-        final_answer = re.match(r"Finish\[(.*)\]", action_str).group(1)
-        print(f"任务完成，最终答案: {final_answer}")
-        break
-    
-    tool_name = re.search(r"(\w+)\(", action_str).group(1)
-    args_str = re.search(r"\((.*)\)", action_str).group(1)
-    kwargs = dict(re.findall(r'(\w+)="([^"]*)"', args_str))
+            # 执行工具调用
+            if tool_name in available_tools:
+                observation = available_tools[tool_name](**kwargs)
+            else:
+                observation = f"错误：未定义的工具 '{tool_name}'"
 
-    if tool_name in available_tools:
-        observation = available_tools[tool_name](**kwargs)
-    else:
-        observation = f"错误：未定义的工具 '{tool_name}'"
+            # 记录观察结果
+            observation_str = f"Observation: {observation}"
+            conversation.append({"role": "system", "content": observation_str})
+            prompt_history.append(observation_str)
+        
+        # 如果循环结束还没有完成，返回当前状态
+        return jsonify({"success": False, "error": "处理超时，请稍后再试", "conversation": conversation}), 500
+        
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
 
-    # 3.4. 记录观察结果
-    observation_str = f"Observation: {observation}"
-    print(f"{observation_str}\n" + "="*40)
-    prompt_history.append(observation_str)
+@app.route('/api/health', methods=['GET'])
+def health():
+    """健康检查接口"""
+    return jsonify({"status": "ok", "message": "服务运行正常"})
+
+# --- 4. 主函数 ---
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5002, debug=True)

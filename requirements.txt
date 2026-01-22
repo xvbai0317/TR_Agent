@@ -1,0 +1,7 @@
+colorama
+python-dotenv
+requests
+tavily-python
+camel-ai
+Flask
+Flask-CORS

@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>智能旅行助手</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>智能旅行助手</h1>
+            <p>基于大语言模型的个性化旅行建议</p>
+        </header>
+        
+        <main>
+            <div class="chat-container">
+                <div id="chat-messages" class="chat-messages">
+                    <div class="message system">
+                        <p>你好！我是你的智能旅行助手。请问有什么可以帮助你的？</p>
+                    </div>
+                </div>
+                
+                <div class="input-area">
+                    <input type="text" id="user-input" placeholder="请输入你的旅行问题，例如：帮我查询北京的天气并推荐景点" maxlength="500">
+                    <button id="send-btn">发送</button>
+                </div>
+            </div>
+        </main>
+        
+        <footer>
+            <p>© 2026 智能旅行助手 | 基于大语言模型技术</p>
+        </footer>
+    </div>
+    
+    <script src="script.js"></script>
+</body>
+</html>
