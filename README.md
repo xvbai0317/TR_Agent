@@ -21,7 +21,7 @@ TR_Agent 是一个基于大语言模型的智能旅行助手，能够根据用�
 #### 2.1 克隆仓库
 
 ```bash
-git clone <your-repository-url>
+git clone https://github.com/xvbai0317/TR_Agent.git
 cd TR_Agent
 ```
 
