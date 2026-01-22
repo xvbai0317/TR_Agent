@@ -6,7 +6,7 @@ def get_attraction(city: str, weather: str) -> str:
     根据城市和天气，使用Tavily Search API搜索并返回优化后的景点推荐。
     """
     # 1. 从环境变量中读取API密钥
-    api_key = "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"
+    api_key = ""
     if not api_key:
         return "错误:未配置TAVILY_API_KEY环境变量。"
 

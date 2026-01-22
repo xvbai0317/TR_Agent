@@ -31,9 +31,9 @@ available_tools = {
 
 # --- 1. 配置LLM客户端 ---
 # 请根据您使用的服务，将这里替换成对应的凭证和地址
-API_KEY = "ms-3c0dc0aa-8482-4f03-80dc-938d25ae9df4"
-BASE_URL = "https://api-inference.modelscope.cn/v1"
-MODEL_ID = "Qwen/Qwen3-32B"
+API_KEY = ""
+BASE_URL = ""
+MODEL_ID = ""
 
 llm = OpenAICompatibleClient(
     model=MODEL_ID,
