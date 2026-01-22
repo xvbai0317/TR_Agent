@@ -29,5 +29,3 @@ def get_weather(city: str) -> str:
     except (KeyError, IndexError) as e:
         # 处理数据解析错误
         return f"错误:解析天气数据失败，可能是城市名称无效 - {e}"
-
-# print(get_weather("武汉"))
